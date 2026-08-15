@@ -132,7 +132,7 @@ export const Settings: React.FC<SettingsProps> = ({ initialSalary, initialCatego
             onClick={handleReset}
             className="text-slate-400 hover:text-emerald-600 transition-colors flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg hover:bg-slate-50"
           >
-            <RefreshCcw size={14} /> Resetar
+            <RefreshCcw size={14} /> 
           </button>
         </div>
 
