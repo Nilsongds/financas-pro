@@ -2,73 +2,37 @@
   "name": "Organizador Financeiro Inteligente",
   "short_name": "Finanças Pro",
   "description": "Organize seu salário mensal em categorias personalizáveis, com divisão fixa ou percentual, gráficos e histórico completo.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/financas-pro/",
+  "scope": "/financas-pro/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "lang": "pt-BR",
-  "dir": "ltr",
-  "categories": [
-    "finance",
-    "productivity",
-    "utilities"
-  ],
-  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "/financas-pro/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "/financas-pro/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-maskable-192.png",
+      "src": "/financas-pro/icons/icon-maskable-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-maskable-512.png",
+      "src": "/financas-pro/icons/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    },
-    {
-      "src": "/icons/icon.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "description": "Visualizar distribuição do salário",
-      "url": "/",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Ajustes",
-      "short_name": "Ajustes",
-      "description": "Configurar categorias e valores",
-      "url": "/#settings",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Histórico",
-      "short_name": "Histórico",
-      "description": "Consultar meses passados",
-      "url": "/#history",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }
