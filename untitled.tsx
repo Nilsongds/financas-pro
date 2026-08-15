@@ -16,7 +16,8 @@ import {
   Upload,
   BarChart3,
   X,
-  Save
+  Save,
+  Repeat
 } from 'lucide-react';
 
 type TransactionType = 'Entrada' | 'Saída' | 'Aplicação' | 'Resgate' | 'Rendimento';
@@ -45,6 +46,7 @@ interface Debt {
   reminderDays: number;
   paid: boolean;
   paidInstallments: number;
+  isRecurring?: boolean;
   createdAt: number;
 }
 
@@ -85,6 +87,7 @@ export const Transactions: React.FC = () => {
     return saved.length ? saved : ['Conta Principal', 'CDB / 99Pay'];
   });
   const [newAccount, setNewAccount] = useState('');
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [filterMonth, setFilterMonth] = useState(todayInput().slice(0, 7));
   const [filterCategory, setFilterCategory] = useState('Todas');
@@ -101,6 +104,7 @@ export const Transactions: React.FC = () => {
   const [debtValue, setDebtValue] = useState('');
   const [debtDueDate, setDebtDueDate] = useState(todayInput());
   const [debtInstallments, setDebtInstallments] = useState('1');
+  const [isRecurringDebt, setIsRecurringDebt] = useState(false);
   const [reminderDays, setReminderDays] = useState('2');
 
   useEffect(() => {
@@ -256,7 +260,8 @@ export const Transactions: React.FC = () => {
     resetTransactionForm();
   };
 
-  const addAccount = () => {
+  const addAccount = (event?: React.FormEvent) => {
+    if (event) event.preventDefault();
     const name = newAccount.trim();
     if (!name) return;
     if (accounts.some(item => item.toLowerCase() === name.toLowerCase())) {
@@ -266,6 +271,7 @@ export const Transactions: React.FC = () => {
     setAccounts(current => [...current, name]);
     setAccount(name);
     setNewAccount('');
+    setIsAddingAccount(false);
   };
 
   const deleteTransaction = (id: string) => {
@@ -277,7 +283,7 @@ export const Transactions: React.FC = () => {
   const addDebt = (event: React.FormEvent) => {
     event.preventDefault();
     const numericValue = parseCurrencyInput(debtValue);
-    const installments = Math.max(1, Number(debtInstallments) || 1);
+    const installments = isRecurringDebt ? 1 : Math.max(1, Number(debtInstallments) || 1);
     const days = Math.max(0, Number(reminderDays) || 0);
 
     if (!debtName.trim() || !numericValue || numericValue <= 0 || !debtDueDate) {
@@ -294,6 +300,7 @@ export const Transactions: React.FC = () => {
       reminderDays: days,
       paid: false,
       paidInstallments: 0,
+      isRecurring: isRecurringDebt,
       createdAt: Date.now()
     };
 
@@ -302,6 +309,7 @@ export const Transactions: React.FC = () => {
     setDebtValue('');
     setDebtDueDate(todayInput());
     setDebtInstallments('1');
+    setIsRecurringDebt(false);
     setReminderDays('2');
   };
 
@@ -450,23 +458,57 @@ export const Transactions: React.FC = () => {
 
       {(section === 'movements' || section === 'investments') && (
         <>
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-            <div className="flex items-center gap-2">
-              <WalletCards size={19} className="text-blue-600" />
-              <h3 className="font-bold text-slate-800">Minhas contas</h3>
+          {isAddingAccount && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <WalletCards size={18} className="text-emerald-700" />
+                  <h4 className="font-bold text-emerald-900 text-sm">Adicionar nova conta</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingAccount(false);
+                    setNewAccount('');
+                  }}
+                  className="rounded-lg p-1 text-slate-400 hover:text-slate-600"
+                  aria-label="Fechar"
+                >
+                  <X size={17} />
+                </button>
+              </div>
+              <form onSubmit={addAccount} className="flex gap-2">
+                <input
+                  autoFocus
+                  value={newAccount}
+                  onChange={event => setNewAccount(event.target.value)}
+                  placeholder="Nome da conta (ex: Nubank, Inter, Carteira)"
+                  className="min-w-0 flex-1 rounded-xl border border-emerald-200 bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <button
+                  type="submit"
+                  className="rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
+                >
+                  Salvar conta
+                </button>
+              </form>
+              <p className="text-[11px] text-emerald-800">
+                A nova conta será selecionada automaticamente para você preencher os dados do lançamento abaixo.
+              </p>
             </div>
-            <div className="flex gap-2">
-              <input value={newAccount} onChange={event => setNewAccount(event.target.value)} placeholder="Nome da nova conta" className="min-w-0 flex-1 rounded-xl border border-slate-200 p-3 text-sm" />
-              <button type="button" onClick={addAccount} className="rounded-xl bg-blue-600 px-4 text-white" aria-label="Adicionar conta"><Plus size={18} /></button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {accounts.map(item => <span key={item} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-600">{item}</span>)}
-            </div>
-          </section>
+          )}
 
           <form onSubmit={addTransaction} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
             <div className="flex items-center gap-2">
-              <Plus size={20} className="text-emerald-600" />
+              <button
+                type="button"
+                onClick={() => setIsAddingAccount(current => !current)}
+                className="rounded-lg bg-emerald-50 p-2 text-emerald-700 hover:bg-emerald-100 active:scale-95 transition flex items-center justify-center"
+                title="Adicionar nova conta"
+                aria-label="Adicionar nova conta"
+              >
+                <Plus size={18} />
+              </button>
               <h3 className="font-bold text-slate-800 flex-1">
                 {editingTransactionId ? 'Editar lançamento' : section === 'investments' ? 'Registrar investimento' : 'Novo lançamento'}
               </h3>
@@ -673,7 +715,25 @@ export const Transactions: React.FC = () => {
           <form onSubmit={addDebt} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
             <div className="flex items-center gap-2">
               <CircleDollarSign size={20} className="text-rose-500" />
-              <h3 className="font-bold text-slate-800">Cadastrar dívida</h3>
+              <h3 className="font-bold text-slate-800">Cadastrar dívida / conta</h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => setIsRecurringDebt(false)}
+                className={'rounded-lg py-2 text-xs font-semibold transition ' + (!isRecurringDebt ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500')}
+              >
+                Parcelada (com parcelas)
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRecurringDebt(true)}
+                className={'rounded-lg py-2 text-xs font-semibold transition flex items-center justify-center gap-1.5 ' + (isRecurringDebt ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500')}
+              >
+                <Repeat size={13} />
+                Recorrente (Mensal)
+              </button>
             </div>
 
             <label className="block text-xs font-medium text-slate-600">
@@ -681,14 +741,14 @@ export const Transactions: React.FC = () => {
               <input
                 value={debtName}
                 onChange={event => setDebtName(event.target.value)}
-                placeholder="Ex.: Cartão, empréstimo, loja"
+                placeholder={isRecurringDebt ? "Ex.: Internet, Aluguel, Academia, Assinatura" : "Ex.: Cartão, empréstimo, loja"}
                 className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-sm"
               />
             </label>
 
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs font-medium text-slate-600">
-                Valor total (R$)
+                {isRecurringDebt ? 'Valor mensal (R$)' : 'Valor total (R$)'}
                 <input
                   inputMode="decimal"
                   value={debtValue}
@@ -699,7 +759,7 @@ export const Transactions: React.FC = () => {
               </label>
 
               <label className="text-xs font-medium text-slate-600">
-                Vencimento
+                {isRecurringDebt ? 'Dia do vencimento' : 'Vencimento'}
                 <input
                   type="date"
                   value={debtDueDate}
@@ -708,16 +768,26 @@ export const Transactions: React.FC = () => {
                 />
               </label>
 
-              <label className="text-xs font-medium text-slate-600">
-                Quantidade de parcelas
-                <input
-                  type="number"
-                  min="1"
-                  value={debtInstallments}
-                  onChange={event => setDebtInstallments(event.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-sm"
-                />
-              </label>
+              {!isRecurringDebt ? (
+                <label className="text-xs font-medium text-slate-600">
+                  Quantidade de parcelas
+                  <input
+                    type="number"
+                    min="1"
+                    value={debtInstallments}
+                    onChange={event => setDebtInstallments(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-sm"
+                  />
+                </label>
+              ) : (
+                <div className="rounded-xl border border-purple-100 bg-purple-50 p-2.5 flex items-center gap-2">
+                  <Repeat size={18} className="text-purple-600 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-purple-800 leading-tight">Mensal Contínua</p>
+                    <p className="text-[10px] text-purple-600 leading-tight">Sem limite de parcelas</p>
+                  </div>
+                </div>
+              )}
 
               <label className="text-xs font-medium text-slate-600">
                 Lembrar antes
@@ -759,38 +829,83 @@ export const Transactions: React.FC = () => {
                   className={'rounded-2xl border bg-white p-4 shadow-sm ' + (debt.paid ? 'border-emerald-100 opacity-70' : 'border-slate-100')}
                 >
                   <div className="flex items-start gap-3">
-                    <div className={'rounded-xl p-2 ' + (debt.paid ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600')}>
-                      {debt.paid ? <CheckCircle2 size={20} /> : <CalendarDays size={20} />}
+                    <div className={'rounded-xl p-2 ' + (debt.paid ? 'bg-emerald-50 text-emerald-600' : debt.isRecurring ? 'bg-purple-50 text-purple-600' : 'bg-rose-50 text-rose-600')}>
+                      {debt.paid ? <CheckCircle2 size={20} /> : debt.isRecurring ? <Repeat size={20} /> : <CalendarDays size={20} />}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start gap-3">
                         <div>
-                          <p className={'font-bold ' + (debt.paid ? 'line-through text-slate-400' : 'text-slate-800')}>
-                            {debt.name}
-                          </p>
-                          <p className="text-xs text-slate-500">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={'font-bold ' + (debt.paid ? 'line-through text-slate-400' : 'text-slate-800')}>
+                              {debt.name}
+                            </p>
+                            {debt.isRecurring && (
+                              <span className="inline-flex items-center gap-1 text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md font-semibold border border-purple-100">
+                                <Repeat size={10} /> Recorrente
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">
                             Vence em {new Date(debt.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                           </p>
                         </div>
-                        <p className="font-bold text-slate-800">{formatMoney(debt.totalValue)}</p>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-2">
-                        {debt.installments} parcela(s) · lembrete {debt.reminderDays === 0 ? 'no dia' : debt.reminderDays + ' dia(s) antes'}
-                      </p>
-                      <div className="mt-3">
-                        <div className="flex justify-between text-xs text-slate-600 mb-1">
-                          <span>{debt.paidInstallments || 0} de {debt.installments} parcela(s) pagas</span>
-                          <span>Restante: {formatMoney(debt.totalValue * (1 - (debt.paidInstallments || 0) / debt.installments))}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full rounded-full bg-emerald-500" style={{ width: Math.min(100, ((debt.paidInstallments || 0) / debt.installments) * 100) + '%' }} />
+                        <div className="text-right">
+                          <p className="font-bold text-slate-800">{formatMoney(debt.totalValue)}</p>
+                          {debt.isRecurring && <span className="text-[10px] text-slate-400">/mês</span>}
                         </div>
                       </div>
-                      <div className="mt-3 grid grid-cols-4 gap-2">
-                        <button onClick={() => changePaidInstallments(debt.id, -1)} className="rounded-xl bg-slate-100 px-2 py-2 text-xs font-bold text-slate-600" aria-label="Diminuir parcela paga">-1</button>
-                        <button onClick={() => changePaidInstallments(debt.id, 1)} className="rounded-xl bg-emerald-50 px-2 py-2 text-xs font-bold text-emerald-700" aria-label="Adicionar parcela paga">+1 paga</button>
-                        <button onClick={() => toggleDebtPaid(debt.id)} className="rounded-xl bg-blue-50 px-2 py-2 text-xs font-bold text-blue-700">{debt.paid ? 'Reabrir' : 'Quitar'}</button>
-                        <button onClick={() => deleteDebt(debt.id)} className="rounded-xl bg-rose-50 px-2 py-2 text-rose-600" aria-label="Excluir dívida"><Trash2 size={17} className="mx-auto" /></button>
+
+                      {debt.isRecurring ? (
+                        <div className="mt-3 flex items-center justify-between text-xs bg-slate-50 p-2.5 rounded-xl">
+                          <span className="text-slate-500 font-medium flex items-center gap-1">
+                            <Repeat size={12} className="text-purple-600" /> Cobrança mensal contínua
+                          </span>
+                          <span className={'font-bold ' + (debt.paid ? 'text-emerald-600' : 'text-amber-600')}>
+                            {debt.paid ? '✓ Paga este mês' : 'Pendente este mês'}
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xs text-slate-400 mt-2">
+                            {debt.installments} parcela(s) · lembrete {debt.reminderDays === 0 ? 'no dia' : debt.reminderDays + ' dia(s) antes'}
+                          </p>
+                          <div className="mt-3">
+                            <div className="flex justify-between text-xs text-slate-600 mb-1">
+                              <span>{debt.paidInstallments || 0} de {debt.installments} parcela(s) pagas</span>
+                              <span>Restante: {formatMoney(debt.totalValue * (1 - (debt.paidInstallments || 0) / debt.installments))}</span>
+                            </div>
+                            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full rounded-full bg-emerald-500" style={{ width: Math.min(100, ((debt.paidInstallments || 0) / debt.installments) * 100) + '%' }} />
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      <div className={'mt-3 ' + (debt.isRecurring ? 'flex gap-2' : 'grid grid-cols-4 gap-2')}>
+                        {debt.isRecurring ? (
+                          <>
+                            <button
+                              onClick={() => toggleDebtPaid(debt.id)}
+                              className={'flex-1 rounded-xl px-3 py-2 text-xs font-bold transition ' + (debt.paid ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700')}
+                            >
+                              {debt.paid ? 'Reabrir para este mês' : 'Marcar como paga este mês'}
+                            </button>
+                            <button
+                              onClick={() => deleteDebt(debt.id)}
+                              className="rounded-xl bg-rose-50 px-3 py-2 text-rose-600"
+                              aria-label="Excluir dívida"
+                            >
+                              <Trash2 size={17} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => changePaidInstallments(debt.id, -1)} className="rounded-xl bg-slate-100 px-2 py-2 text-xs font-bold text-slate-600" aria-label="Diminuir parcela paga">-1</button>
+                            <button onClick={() => changePaidInstallments(debt.id, 1)} className="rounded-xl bg-emerald-50 px-2 py-2 text-xs font-bold text-emerald-700" aria-label="Adicionar parcela paga">+1 paga</button>
+                            <button onClick={() => toggleDebtPaid(debt.id)} className="rounded-xl bg-blue-50 px-2 py-2 text-xs font-bold text-blue-700">{debt.paid ? 'Reabrir' : 'Quitar'}</button>
+                            <button onClick={() => deleteDebt(debt.id)} className="rounded-xl bg-rose-50 px-2 py-2 text-rose-600" aria-label="Excluir dívida"><Trash2 size={17} className="mx-auto" /></button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
