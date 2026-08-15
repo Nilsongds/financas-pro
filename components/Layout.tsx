@@ -1,8 +1,7 @@
 
-import React, { useState } from 'react';
-import { LayoutDashboard, Settings as SettingsIcon, History as HistoryIcon, Wallet, Download } from 'lucide-react';
+import React from 'react';
+import { LayoutDashboard, Settings as SettingsIcon, History as HistoryIcon, Wallet } from 'lucide-react';
 import { TabType } from '../types';
-import { InstallModal } from './InstallModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,8 +10,6 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
-  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-
   return (
     <div className="min-h-screen flex flex-col max-w-2xl mx-auto bg-white shadow-xl">
       {/* Header */}
@@ -28,15 +25,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
             </div>
           </div>
 
-          <button
-            onClick={() => setIsInstallModalOpen(true)}
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-emerald-600 active:scale-95 text-emerald-400 hover:text-white px-3 py-1.5 rounded-xl border border-slate-700 hover:border-emerald-500 text-xs font-semibold transition-all shadow-sm"
-            title="Instalar aplicativo no celular"
-          >
-            <Download size={14} />
-            <span className="hidden sm:inline">Instalar App</span>
-            <span className="sm:hidden">Instalar</span>
-          </button>
+
         </div>
       </header>
 
@@ -70,12 +59,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
         </button>
       </nav>
 
-      {/* Install PWA Modal */}
-      <InstallModal 
-        isOpen={isInstallModalOpen} 
-        onClose={() => setIsInstallModalOpen(false)} 
-      />
+
     </div>
   );
 };
-
