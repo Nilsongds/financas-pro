@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { Settings } from './components/Settings';
 import { History } from './components/History';
+import { Transactions } from './untitled';
 import { Category, HistoryRecord, TabType } from './types';
 import { INITIAL_CATEGORIES, INITIAL_SALARY } from './constants';
 
@@ -13,7 +13,6 @@ const App: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
 
-  // Carregar dados salvos do localStorage ao iniciar
   useEffect(() => {
     const savedSalary = localStorage.getItem('fin_salary');
     const savedCategories = localStorage.getItem('fin_categories');
@@ -24,14 +23,11 @@ const App: React.FC = () => {
     if (savedHistory) setHistory(JSON.parse(savedHistory));
   }, []);
 
-  // Salvar alterações básicas
   const handleUpdateSettings = (newSalary: number, newCategories: Category[]) => {
     setSalary(newSalary);
     setCategories(newCategories);
-    
     localStorage.setItem('fin_salary', newSalary.toString());
     localStorage.setItem('fin_categories', JSON.stringify(newCategories));
-    
     setActiveTab('dashboard');
   };
 
@@ -42,23 +38,21 @@ const App: React.FC = () => {
     const newRecord: HistoryRecord = {
       id: Date.now().toString(),
       date: new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-      salary: salary,
+      salary,
       allocations: categories.map(cat => {
-        const value = cat.type === 'fixed' 
-          ? cat.fixedValue 
+        const value = cat.type === 'fixed'
+          ? cat.fixedValue
           : (remainingSalary * cat.percentage) / 100;
-        
-        // Calculamos a porcentagem real em relação ao salário total para o histórico
         const realPercentage = salary > 0 ? (value / salary) * 100 : 0;
 
         return {
           name: cat.name,
           percentage: Number(realPercentage.toFixed(1)),
-          value: value
+          value
         };
       })
     };
-    
+
     const updatedHistory = [newRecord, ...history];
     setHistory(updatedHistory);
     localStorage.setItem('fin_history', JSON.stringify(updatedHistory));
@@ -83,22 +77,23 @@ const App: React.FC = () => {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
       {activeTab === 'dashboard' && (
-        <Dashboard 
-          salary={salary} 
-          categories={categories} 
+        <Dashboard
+          salary={salary}
+          categories={categories}
           onLogMonth={handleLogMonth}
         />
       )}
+      {activeTab === 'transactions' && <Transactions />}
       {activeTab === 'settings' && (
-        <Settings 
-          initialSalary={salary} 
-          initialCategories={categories} 
-          onSave={handleUpdateSettings} 
+        <Settings
+          initialSalary={salary}
+          initialCategories={categories}
+          onSave={handleUpdateSettings}
         />
       )}
       {activeTab === 'history' && (
-        <History 
-          history={history} 
+        <History
+          history={history}
           onClear={clearHistory}
           onDelete={deleteHistoryItem}
         />
