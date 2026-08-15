@@ -1,4 +1,3 @@
-
 export interface Category {
   id: string;
   name: string;
@@ -20,4 +19,4 @@ export interface HistoryRecord {
   }[];
 }
 
-export type TabType = 'dashboard' | 'settings' | 'history';
+export type TabType = 'dashboard' | 'transactions' | 'settings' | 'history';
