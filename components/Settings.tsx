@@ -87,15 +87,17 @@ export const Settings: React.FC<SettingsProps> = ({ initialSalary, initialCatego
   };
 
   const handleReset = () => {
-    const defaultSalary = 3000;
-    setSalary(defaultSalary);
-    setSalaryInput(formatCurrencyInput(defaultSalary));
-    setCategories(initialCategories.map(cat => ({ 
-      ...cat, 
-      type: 'percentage', 
-      percentage: 25, 
-      fixedValue: 0 
-    })));
+    const zeroedCategories = initialCategories.map(cat => ({
+      ...cat,
+      type: 'percentage',
+      percentage: 0,
+      fixedValue: 0,
+      description: ''
+    }));
+    setSalary(0);
+    setSalaryInput(formatCurrencyInput(0));
+    setCategories(zeroedCategories);
+    onSave(0, zeroedCategories);
   };
 
   const hasPercentageCategories = categories.some(cat => cat.type === 'percentage');
@@ -263,35 +265,7 @@ export const Settings: React.FC<SettingsProps> = ({ initialSalary, initialCatego
       </section>
 
       {/* PWA & App Installation Card */}
-      <section className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-5 rounded-2xl shadow-md space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-emerald-500/20 text-emerald-400 p-2 rounded-xl border border-emerald-500/30">
-              <Smartphone size={20} />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold">Aplicativo no Celular (PWA)</h3>
-              <p className="text-[11px] text-slate-400">Instalação gratuita & Offline</p>
-            </div>
-          </div>
-          {isStandalone ? (
-            <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/30 font-medium">
-              <CheckCircle2 size={12} /> Instalado
-            </span>
-          ) : (
-            <button
-              onClick={() => setIsInstallModalOpen(true)}
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm"
-            >
-              <Download size={13} />
-              Instalar
-            </button>
-          )}
-        </div>
-        <p className="text-xs text-slate-300 leading-relaxed">
-          Instale no Chrome do Android tocando em <strong>"Instalar aplicativo"</strong> para acessar suas finanças direto da tela inicial, com funcionamento 100% offline e histórico salvo localmente.
-        </p>
-      </section>
+      
 
       {/* Save Button */}
       <div className="sticky bottom-4 z-10 px-2">
