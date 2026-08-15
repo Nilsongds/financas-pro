@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  
+  <!-- Outer Accent Glow / Ring -->
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="none" stroke="url(#emeraldGrad)" stroke-width="6" opacity="0.4" />
+
+  <!-- Wallet Body -->
+  <g filter="url(#shadow)">
+    <!-- Main Wallet Card Body -->
+    <rect x="96" y="140" width="320" height="232" rx="28" fill="url(#emeraldGrad)" />
+    
+    <!-- Top Pocket Tab -->
+    <path d="M 128 140 L 160 112 L 352 112 L 384 140 Z" fill="#047857" opacity="0.8" />
+    
+    <!-- Inner Card Peak -->
+    <rect x="144" y="116" width="224" height="60" rx="12" fill="#ecfdf5" opacity="0.9" />
+    <rect x="164" y="132" width="100" height="8" rx="4" fill="#059669" opacity="0.5" />
+    
+    <!-- Front Wallet Flap -->
+    <rect x="96" y="176" width="320" height="196" rx="24" fill="url(#emeraldGrad)" />
+    
+    <!-- Wallet Stitching Line -->
+    <rect x="108" y="188" width="296" height="172" rx="16" fill="none" stroke="#a7f3d0" stroke-width="3" stroke-dasharray="8 6" opacity="0.6" />
+    
+    <!-- Lock Clasp Flap -->
+    <path d="M 280 236 L 396 236 C 410 236 420 248 420 262 L 420 286 C 420 300 410 312 396 312 L 280 312 C 268 312 258 302 258 290 L 258 258 C 258 246 268 236 280 236 Z" fill="#065f46" />
+    
+    <!-- Gold Coin Emblem / Button -->
+    <circle cx="370" cy="274" r="22" fill="url(#goldGrad)" />
+    <circle cx="370" cy="274" r="16" fill="none" stroke="#fef3c7" stroke-width="2" />
+    <text x="370" y="281" font-family="Arial, sans-serif" font-size="18" font-weight="900" fill="#78350f" text-anchor="middle">R$</text>
+
+    <!-- Upward Growth Spark/Chart -->
+    <g transform="translate(136, 228)">
+      <path d="M 12 64 L 40 40 L 64 52 L 100 16" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+      <polygon points="96,16 108,14 104,26" fill="#ffffff" />
+      <circle cx="12" cy="64" r="5" fill="#ffffff" />
+      <circle cx="40" cy="40" r="5" fill="#ffffff" />
+      <circle cx="64" cy="52" r="5" fill="#ffffff" />
+      <circle cx="100" cy="16" r="6" fill="#fbbf24" />
+    </g>
+  </g>
+</svg>

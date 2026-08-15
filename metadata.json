@@ -1,0 +1,8 @@
+{
+  "name": "Organizador Financeiro Inteligente",
+  "description": "Uma ferramenta simples e poderosa para organizar seu salário mensal em categorias personalizáveis, visualizar gastos com gráficos e manter um histórico de evolução financeira.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
