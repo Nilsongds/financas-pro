@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:android": "vite build --base=./",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@capacitor/core": "^7.4.3",
