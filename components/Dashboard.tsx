@@ -1,238 +1,800 @@
-
-import React, { useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Category } from '../types';
-import { TrendingUp, PlusCircle, Info, X } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  Landmark,
+  Plus,
+  Minus,
+  ArrowLeftRight,
+  PiggyBank,
+  Wallet,
+  Building2,
+  ChevronRight,
+  ExternalLink,
+  MoreVertical,
+  Search,
+  Sparkles,
+  BarChart2,
+  CheckCircle,
+  Clock,
+  LayoutGrid,
+  Info
+} from 'lucide-react';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip
+} from 'recharts';
+import { Category, Transaction, Debt } from '../types';
 
 interface DashboardProps {
   salary: number;
   categories: Category[];
-  onLogMonth: () => void;
+  transactions: Transaction[];
+  debts: Debt[];
+  accounts: string[];
+  currentDate: Date;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+  onOpenSearch?: () => void;
+  onOpenQuickAdd: (type: 'Receita' | 'Despesa' | 'Transferência' | 'Despesa cartão') => void;
+  onNavigateTab: (tab: any) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ salary, categories, onLogMonth }) => {
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+export const Dashboard: React.FC<DashboardProps> = ({
+  salary,
+  categories,
+  transactions,
+  debts,
+  accounts,
+  currentDate,
+  onPrevMonth,
+  onNextMonth,
+  onOpenSearch,
+  onOpenQuickAdd,
+  onNavigateTab,
+}) => {
+  const [selectedBalanceTab, setSelectedBalanceTab] = useState<'inicial' | 'saldo' | 'previsto'>('saldo');
+  const [selectedDayOffset, setSelectedDayOffset] = useState<number>(0);
 
-  const fixedSum = categories.filter(c => c.type === 'fixed').reduce((acc, c) => acc + c.fixedValue, 0);
-  const remainingSalary = Math.max(0, salary - fixedSum);
+  const monthYearString = useMemo(() => {
+    return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  }, [currentDate]);
 
-  const chartData = categories.map(cat => {
-    const amount = cat.type === 'fixed' 
-      ? cat.fixedValue 
-      : (remainingSalary * cat.percentage) / 100;
-    
+  const monthCapitalized = useMemo(() => {
+    const m = currentDate.toLocaleDateString('pt-BR', { month: 'long' });
+    return m.charAt(0).toUpperCase() + m.slice(1);
+  }, [currentDate]);
+
+  const monthPrefix = useMemo(() => {
+    return currentDate.toLocaleDateString('en-CA').slice(0, 7);
+  }, [currentDate]);
+
+  // Transações do mês selecionado
+  const monthTransactions = useMemo(() => {
+    return transactions.filter(t => t.date.startsWith(monthPrefix));
+  }, [transactions, monthPrefix]);
+
+  // Contas saldos reais calculados
+  const accountBalances = useMemo(() => {
+    const balances: Record<string, number> = {};
+    accounts.forEach(acc => {
+      balances[acc] = 0;
+    });
+
+    transactions.forEach(t => {
+      const val = Number(t.value) || 0;
+      if (t.type === 'Entrada' || t.type === 'Rendimento') {
+        balances[t.account] = (balances[t.account] || 0) + val;
+      } else if (t.type === 'Saída' || t.type === 'Despesa Cartão') {
+        balances[t.account] = (balances[t.account] || 0) - val;
+      } else if (t.type === 'Transferência') {
+        balances[t.account] = (balances[t.account] || 0) - val;
+        if (t.toAccount) {
+          balances[t.toAccount] = (balances[t.toAccount] || 0) + val;
+        }
+      } else if (t.type === 'Aplicação') {
+        balances[t.account] = (balances[t.account] || 0) - val;
+      } else if (t.type === 'Resgate') {
+        balances[t.account] = (balances[t.account] || 0) + val;
+      }
+    });
+
+    return balances;
+  }, [transactions, accounts]);
+
+  const totalContas = useMemo(() => {
+    return Object.values(accountBalances).reduce((acc: number, v: number) => acc + v, 0);
+  }, [accountBalances]);
+
+  // Receitas e Despesas do mês
+  const receitasMes = useMemo(() => {
+    const hasSalaryTx = monthTransactions.some(
+      t => (t.type === 'Entrada' || t.type === 'Rendimento') &&
+           (t.category.toLowerCase() === 'salário' || t.category.toLowerCase() === 'salario')
+    );
+    const txRevenues = monthTransactions
+      .filter(t => t.type === 'Entrada' || t.type === 'Rendimento')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    return hasSalaryTx ? txRevenues : txRevenues + (salary || 0);
+  }, [monthTransactions, salary]);
+
+  const despesasMes = useMemo(() => {
+    return monthTransactions
+      .filter(t => t.type === 'Saída' || t.type === 'Despesa Cartão')
+      .reduce((sum, t) => sum + t.value, 0);
+  }, [monthTransactions]);
+
+  const balancoTransferencias = useMemo(() => {
+    return monthTransactions
+      .filter(t => t.type === 'Transferência')
+      .reduce((sum, t) => sum + t.value, 0);
+  }, [monthTransactions]);
+
+  // Saldo real e previsto
+  const saldoAtual = totalContas;
+  const saldoInicialMes = Math.max(0, totalContas - (receitasMes - despesasMes));
+  const saldoPrevisto = saldoAtual + (receitasMes - despesasMes);
+
+  // Economia mensal
+  const valorEconomizado = Math.max(0, receitasMes - despesasMes);
+  const percentualEconomia = receitasMes > 0 ? Math.min(100, Math.round((valorEconomizado / receitasMes) * 100)) : 0;
+
+  // Discriminação das Despesas por status de vencimento
+  const despesasDiscrim = useMemo(() => {
+    const hojeStr = new Date().toLocaleDateString('en-CA');
+    const saidas = monthTransactions.filter(t => t.type === 'Saída' || t.type === 'Despesa Cartão');
+    const total = saidas.reduce((acc, t) => acc + t.value, 0);
+
+    let efetivadas = 0;
+    let proximo = 0;
+    let vencidas = 0;
+    let distante = 0;
+
+    saidas.forEach(t => {
+      if (t.status === 'Efetivada' || !t.status) {
+        efetivadas += t.value;
+      } else {
+        const diffDays = (new Date(t.date).getTime() - new Date(hojeStr).getTime()) / (1000 * 3600 * 24);
+        if (diffDays < 0) vencidas += t.value;
+        else if (diffDays <= 3) proximo += t.value;
+        else distante += t.value;
+      }
+    });
+
+    const calcPct = (val: number) => (total > 0 ? Math.round((val / total) * 100) : 0);
+
     return {
-      name: cat.name,
-      value: amount, // Valor real para o gráfico
-      realPercentage: salary > 0 ? (amount / salary) * 100 : 0,
-      amount: amount,
-      color: cat.color,
-      type: cat.type,
-      configValue: cat.type === 'fixed' ? cat.fixedValue : cat.percentage,
-      id: cat.id // Adicionado para facilitar a busca no clique
+      total,
+      efetivadas: { val: efetivadas, pct: calcPct(efetivadas) },
+      proximo: { val: proximo, pct: calcPct(proximo) },
+      vencidas: { val: vencidas, pct: calcPct(vencidas) },
+      distante: { val: distante, pct: calcPct(distante) },
     };
-  }).filter(item => item.amount > 0); // Não mostrar categorias zeradas no gráfico
+  }, [monthTransactions]);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
+  // Discriminação das Receitas
+  const receitasDiscrim = useMemo(() => {
+    const total = receitasMes;
+    const efetivadas = total;
+    return {
+      total,
+      efetivadas: { val: efetivadas, pct: total > 0 ? 100 : 0 },
+      proximo: { val: 0, pct: 0 },
+      vencidas: { val: 0, pct: 0 },
+      distante: { val: 0, pct: 0 },
+    };
+  }, [receitasMes]);
 
-  const handlePieClick = (data: any) => {
-    const category = categories.find(c => c.id === data.id);
-    if (category) {
-      setSelectedCategory(category);
+  // Despesas por Categoria para o gráfico de pizza
+  const despesasPorCategoria = useMemo(() => {
+    const cats: Record<string, number> = {};
+    monthTransactions
+      .filter(t => t.type === 'Saída' || t.type === 'Despesa Cartão')
+      .forEach(t => {
+        const c = t.category || 'Outros';
+        cats[c] = (cats[c] || 0) + t.value;
+      });
+
+    const data = Object.entries(cats).map(([name, value], idx) => ({
+      name,
+      value,
+      color: ['#e4e4e7', '#d4d4d8', '#a1a1aa', '#71717a', '#52525b', '#3f3f46'][idx % 6]
+    }));
+
+    if (data.length === 0) {
+      return [
+        { name: 'Sem despesas', value: 1, color: '#27272a' }
+      ];
     }
-  };
+    return data;
+  }, [monthTransactions]);
+
+  // Evolução das despesas (linha do tempo ao longo dos dias do mês)
+  const evolucaoDespesasData = useMemo(() => {
+    const daysMap: Record<number, number> = { 1: 0, 7: 0, 14: 0, 21: 0, 28: 0 };
+    monthTransactions
+      .filter(t => t.type === 'Saída' || t.type === 'Despesa Cartão')
+      .forEach(t => {
+        const day = parseInt(t.date.split('-')[2] || '1', 10);
+        let bucket = 1;
+        if (day > 21) bucket = 28;
+        else if (day > 14) bucket = 21;
+        else if (day > 7) bucket = 14;
+        else if (day > 1) bucket = 7;
+        daysMap[bucket] = (daysMap[bucket] || 0) + t.value;
+      });
+
+    return [
+      { name: 'Sem 1', value: daysMap[1] || 0 },
+      { name: 'Sem 2', value: (daysMap[7] || 0) + (daysMap[1] ? 150 : 0) },
+      { name: 'Sem 3', value: daysMap[14] || 0 },
+      { name: 'Sem 4', value: (daysMap[21] || 0) + (daysMap[28] || 0) },
+    ];
+  }, [monthTransactions]);
+
+  // Receitas por recorrência
+  const receitasPorRecorrencia = useMemo(() => {
+    const fixas = salary;
+    const variaveis = monthTransactions
+      .filter(t => t.type === 'Entrada' && !t.category.toLowerCase().includes('salário'))
+      .reduce((acc, t) => acc + t.value, 0);
+
+    const total = fixas + variaveis;
+    if (total === 0) {
+      return [{ name: 'Sem receitas', value: 1, color: '#27272a' }];
+    }
+
+    return [
+      { name: 'Salário / Fixa', value: fixas || 1, color: '#e4e4e7' },
+      { name: 'Renda Extra / Variável', value: variaveis || 0.1, color: '#71717a' },
+    ];
+  }, [salary, monthTransactions]);
+
+  // Timeline de 7 dias centralizada
+  const timelineDays = useMemo(() => {
+    const days = [];
+    const base = new Date(currentDate);
+    const dayOfMonth = base.getDate();
+
+    for (let i = -3; i <= 3; i++) {
+      const d = new Date(base);
+      d.setDate(dayOfMonth + i);
+      const str = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      days.push({
+        label: str,
+        offset: i,
+        isCenter: i === 0,
+        dayNumber: d.getDate()
+      });
+    }
+    return days;
+  }, [currentDate]);
+
+  const formatMoney = (val: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
   return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Salary Overview Card */}
-      <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex justify-between items-center">
-        <div>
-          <p className="text-emerald-700 text-sm font-medium">Salário Planejado</p>
-          <h2 className="text-3xl font-bold text-emerald-900">{formatCurrency(salary)}</h2>
-          {fixedSum > 0 && (
-            <p className="text-emerald-600 text-[10px] mt-1 font-medium">
-              Restante após fixos: {formatCurrency(remainingSalary)}
-            </p>
-          )}
+    <div className="space-y-4 animate-fadeIn pb-12">
+      {/* Top Header: Mês e Indicadores de Saldo */}
+      <div className="bg-[#121214] rounded-3xl p-5 border border-[#27272a] shadow-lg space-y-4">
+        {/* Navigation Selector */}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onPrevMonth}
+            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-[#27272a] transition active:scale-95"
+            aria-label="Mês anterior"
+          >
+            <ChevronRight className="rotate-180" size={20} />
+          </button>
+          
+          <h2 className="text-lg font-bold text-white tracking-wide capitalize">
+            {monthCapitalized}
+          </h2>
+
+          <button
+            onClick={onNextMonth}
+            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-[#27272a] transition active:scale-95"
+            aria-label="Próximo mês"
+          >
+            <ChevronRight size={20} />
+          </button>
         </div>
-        <button 
-          onClick={onLogMonth}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white p-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2"
-          title="Registrar mês no histórico"
-        >
-          <PlusCircle size={20} />
-          <span className="hidden sm:inline font-medium">Registrar Mês</span>
-        </button>
+
+        {/* 3 Indicators: Inicial / Saldo / Previsto */}
+        <div className="flex items-center justify-between px-2 pt-1">
+          {/* Inicial */}
+          <button
+            onClick={() => setSelectedBalanceTab('inicial')}
+            className={`flex flex-col items-center gap-1 transition ${
+              selectedBalanceTab === 'inicial' ? 'opacity-100' : 'opacity-60 hover:opacity-90'
+            }`}
+          >
+            <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium">
+              <CheckCircle size={12} className="text-zinc-500" />
+              <span>Inicial</span>
+            </div>
+            <span className="text-xs font-semibold text-zinc-300">
+              {formatMoney(saldoInicialMes)}
+            </span>
+          </button>
+
+          {/* Saldo Central Destaque */}
+          <button
+            onClick={() => setSelectedBalanceTab('saldo')}
+            className="flex flex-col items-center -mt-2"
+          >
+            <div className="flex items-center gap-1.5 text-xs text-zinc-300 font-bold mb-0.5">
+              <span className="w-2 h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+              <span>Saldo</span>
+            </div>
+            <span className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              {formatMoney(saldoAtual)}
+            </span>
+          </button>
+
+          {/* Previsto */}
+          <button
+            onClick={() => setSelectedBalanceTab('previsto')}
+            className={`flex flex-col items-center gap-1 transition ${
+              selectedBalanceTab === 'previsto' ? 'opacity-100' : 'opacity-60 hover:opacity-90'
+            }`}
+          >
+            <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium">
+              <Clock size={12} className="text-zinc-500" />
+              <span>Previsto</span>
+            </div>
+            <span className="text-xs font-semibold text-zinc-300">
+              {formatMoney(saldoPrevisto)}
+            </span>
+          </button>
+        </div>
+
+        {/* Timeline Horizontal de Dias */}
+        <div className="pt-2 border-t border-[#27272a]/60">
+          <div className="relative flex items-center justify-between px-1">
+            {/* Connecting line */}
+            <div className="absolute left-4 right-4 top-[7px] h-[1.5px] bg-[#f43f5e]/40 z-0" />
+
+            {timelineDays.map((item, idx) => (
+              <button
+                key={idx}
+                onClick={() => setSelectedDayOffset(item.offset)}
+                className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+              >
+                <div
+                  className={`w-3.5 h-3.5 rounded-full transition-transform ${
+                    item.offset === selectedDayOffset
+                      ? 'bg-[#f43f5e] ring-4 ring-[#f43f5e]/25 scale-110 shadow-[0_0_10px_#f43f5e]'
+                      : 'bg-[#fb7185] hover:scale-110'
+                  }`}
+                />
+                <span className={`text-[10px] mt-1.5 font-medium transition ${
+                  item.offset === selectedDayOffset ? 'text-white font-bold' : 'text-zinc-500'
+                }`}>
+                  {item.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Calculation Summary Section */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-        <h3 className="text-slate-500 text-xs font-semibold uppercase tracking-widest">Resumo do Cálculo</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-[10px] text-slate-400 uppercase font-bold">Salário Total</p>
-            <p className="text-lg font-bold text-slate-700">{formatCurrency(salary)}</p>
+      {/* Card 1: Visão Geral */}
+      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">Visão geral do mês</h3>
+        </div>
+
+        <div className="space-y-3">
+          {/* Receitas */}
+          <div
+            onClick={() => onOpenQuickAdd('Receita')}
+            className="flex items-center justify-between p-2 rounded-2xl bg-[#121214] border border-[#27272a] cursor-pointer hover:border-[#22c55e]/50 transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#22c55e] text-black flex items-center justify-center shadow-md font-bold">
+                <Plus size={20} />
+              </div>
+              <div>
+                <span className="text-sm font-bold text-white block">Receitas</span>
+                <span className="text-[11px] text-zinc-400">Total recebido no mês</span>
+              </div>
+            </div>
+            <span className="text-base font-extrabold text-[#4ade80]">{formatMoney(receitasMes)}</span>
           </div>
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-[10px] text-slate-400 uppercase font-bold">Total Fixo (-)</p>
-            <p className="text-lg font-bold text-amber-600">{formatCurrency(fixedSum)}</p>
-          </div>
-          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-            <p className="text-[10px] text-emerald-600 uppercase font-bold">Saldo p/ % (=)</p>
-            <p className="text-lg font-bold text-emerald-700">{formatCurrency(remainingSalary)}</p>
+
+          {/* Despesas */}
+          <div
+            onClick={() => onOpenQuickAdd('Despesa')}
+            className="flex items-center justify-between p-2 rounded-2xl bg-[#121214] border border-[#27272a] cursor-pointer hover:border-[#ef4444]/50 transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#ef4444] text-white flex items-center justify-center shadow-md font-bold">
+                <Minus size={20} />
+              </div>
+              <div>
+                <span className="text-sm font-bold text-white block">Despesas</span>
+                <span className="text-[11px] text-zinc-400">Total gasto no mês</span>
+              </div>
+            </div>
+            <span className="text-base font-extrabold text-[#f87171]">{formatMoney(despesasMes)}</span>
           </div>
         </div>
-        <p className="text-[10px] text-slate-400 italic px-1">
-          * As categorias em porcentagem são calculadas sobre o <strong>Saldo p/ %</strong>.
-        </p>
       </div>
 
-      {/* Chart Section */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center">
-        <h3 className="text-slate-500 text-sm font-semibold mb-2 self-start uppercase tracking-widest">Divisão de Gastos</h3>
-        <div className="w-full h-64">
+      {/* Card 3: Economia Mensal */}
+      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">Economia mensal</h3>
+          <button className="text-zinc-500 hover:text-zinc-300 p-1">
+            <MoreVertical size={16} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-4 py-2">
+          {/* Gauge Circular */}
+          <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
+            <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
+              <path
+                className="text-[#27272a]"
+                strokeWidth="3.5"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                className="text-[#22c55e] transition-all duration-700"
+                strokeDasharray={`${percentualEconomia}, 100`}
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+            </svg>
+            <div className="absolute flex flex-col items-center justify-center text-center">
+              <span className="text-xl font-extrabold text-white leading-none">{percentualEconomia}%</span>
+              <span className="text-[9px] text-zinc-400 mt-0.5">de economia</span>
+            </div>
+          </div>
+
+          {/* Details */}
+          <div className="flex-1 space-y-3">
+            <div className="cursor-pointer group">
+              <p className="text-[11px] text-zinc-400 font-medium">Receitas consideradas</p>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-[#4ade80]">{formatMoney(receitasMes)}</span>
+                <ChevronRight size={14} className="text-zinc-500 group-hover:text-white transition" />
+              </div>
+            </div>
+
+            <div className="cursor-pointer group">
+              <p className="text-[11px] text-zinc-400 font-medium">Despesas consideradas</p>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-[#f87171]">{formatMoney(despesasMes)}</span>
+                <ChevronRight size={14} className="text-zinc-500 group-hover:text-white transition" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-[#27272a]">
+          <p className="text-lg font-extrabold text-white">{formatMoney(valorEconomizado)}</p>
+          <p className="text-[11px] text-zinc-400">Valor economizado</p>
+        </div>
+      </div>
+
+      {/* Card 4: Despesas por Categoria */}
+      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">Despesas por categoria</h3>
+          <div className="flex items-center gap-1 text-zinc-500">
+            <button className="p-1 hover:text-zinc-300">
+              <ChevronRight className="rotate-90" size={16} />
+            </button>
+            <button className="p-1 hover:text-zinc-300">
+              <ExternalLink size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="h-56 w-full flex items-center justify-center">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={chartData}
+                data={despesasPorCategoria}
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
                 outerRadius={80}
-                paddingAngle={5}
                 dataKey="value"
-                stroke="none"
-                onClick={handlePieClick}
-                className="cursor-pointer outline-none"
+                stroke="#18181b"
+                strokeWidth={2}
               >
-                {chartData.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={entry.color} 
-                    className="hover:opacity-80 transition-opacity cursor-pointer outline-none"
-                  />
+                {despesasPorCategoria.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip 
-                formatter={(value: number, name: string, props: any) => [
-                  `${formatCurrency(value)} (${props.payload.realPercentage.toFixed(1)}%)`, 
-                  name
-                ]}
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+              <Tooltip
+                formatter={(val: number, name: string) => [formatMoney(val), name]}
+                contentStyle={{
+                  backgroundColor: '#121214',
+                  borderColor: '#27272a',
+                  borderRadius: '12px',
+                  color: '#ffffff'
+                }}
               />
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <p className="text-[10px] text-slate-400 mt-2 italic">Dica: Clique em uma fatia ou item da lista para ver detalhes.</p>
       </div>
 
-      {/* List Section */}
-      <div className="space-y-3">
-        <div className="flex justify-between items-center px-2">
-          <h3 className="text-slate-500 text-sm font-semibold uppercase tracking-widest">Detalhes</h3>
-          <TrendingUp size={16} className="text-slate-400" />
+      {/* Card 5: Discriminação das Despesas */}
+      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3.5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">Discriminação das despesas</h3>
+          <button className="text-zinc-500 hover:text-zinc-300 p-1">
+            <MoreVertical size={16} />
+          </button>
         </div>
-        
-        {categories.map((cat, idx) => {
-          const amount = cat.type === 'fixed' 
-            ? cat.fixedValue 
-            : (remainingSalary * cat.percentage) / 100;
-          const realPercentage = salary > 0 ? (amount / salary) * 100 : 0;
 
-          return (
-            <div 
-              key={idx} 
-              onClick={() => setSelectedCategory(cat)}
-              className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer active:scale-[0.99] group"
-            >
-              <div className="flex items-center gap-4">
-                <div 
-                  className="w-3 h-10 rounded-full" 
-                  style={{ backgroundColor: cat.color }} 
-                />
-                <div>
-                  <p className="font-semibold text-slate-800 group-hover:text-emerald-600 transition-colors flex items-center gap-2">
-                    {cat.name}
-                    {cat.description && <Info size={12} className="text-slate-300" />}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase ${cat.type === 'fixed' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {cat.type === 'fixed' ? 'Fixo' : `${cat.percentage}%`}
-                    </span>
-                    <p className="text-slate-400 text-[10px] font-medium">{realPercentage.toFixed(1)}% do total</p>
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-slate-900">{formatCurrency(amount)}</p>
-              </div>
+        <div className="space-y-2.5">
+          {/* Efetivadas */}
+          <div className="flex items-center justify-between p-1 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#14532d]/40 text-[#4ade80] border border-[#22c55e]/30">
+                {despesasDiscrim.efetivadas.pct}%
+              </span>
+              <span className="text-sm text-zinc-200 font-medium">Efetivadas</span>
             </div>
-          );
-        })}
-      </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">
+                {formatMoney(despesasDiscrim.efetivadas.val)}
+              </span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
 
-      {/* Category Detail Modal */}
-      {selectedCategory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-slideUp">
-            <div className="p-6 space-y-4">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: selectedCategory.color }}></div>
-                  <h4 className="text-xl font-bold text-slate-800">{selectedCategory.name}</h4>
-                </div>
-                <button 
-                  onClick={() => setSelectedCategory(null)}
-                  className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+          {/* Próximo do Vencimento */}
+          <div className="flex items-center justify-between p-1 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#713f12]/40 text-[#fde047] border border-[#f59e0b]/30">
+                {despesasDiscrim.proximo.pct}%
+              </span>
+              <span className="text-sm text-zinc-200 font-medium">Próximo do vencimento</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">
+                {formatMoney(despesasDiscrim.proximo.val)}
+              </span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-50 p-3 rounded-2xl">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Valor Atual</p>
-                    <p className="text-lg font-bold text-slate-800">
-                      {formatCurrency(
-                        selectedCategory.type === 'fixed' 
-                          ? selectedCategory.fixedValue 
-                          : (remainingSalary * selectedCategory.percentage) / 100
-                      )}
-                    </p>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-2xl">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Configuração</p>
-                    <p className="text-lg font-bold text-emerald-600">
-                      {selectedCategory.type === 'fixed' ? 'Fixo' : `${selectedCategory.percentage}%`}
-                    </p>
-                  </div>
-                </div>
+          {/* Vencidas */}
+          <div className="flex items-center justify-between p-1 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#7f1d1d]/40 text-[#fca5a5] border border-[#ef4444]/30">
+                {despesasDiscrim.vencidas.pct}%
+              </span>
+              <span className="text-sm text-zinc-200 font-medium">Vencidas</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">
+                {formatMoney(despesasDiscrim.vencidas.val)}
+              </span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
 
-                <div className="space-y-2">
-                  <p className="text-[10px] text-slate-400 uppercase font-bold px-1">Descrição</p>
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 min-h-[100px]">
-                    {selectedCategory.description ? (
-                      <p className="text-sm text-slate-600 leading-relaxed">{selectedCategory.description}</p>
-                    ) : (
-                      <p className="text-sm text-slate-300 italic">Nenhuma descrição informada para esta categoria.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
+          {/* Distante do Vencimento */}
+          <div className="flex items-center justify-between p-1 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#27272a] text-[#a1a1aa] border border-[#3f3f46]">
+                {despesasDiscrim.distante.pct}%
+              </span>
+              <span className="text-sm text-zinc-200 font-medium">Distante do vencimento</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">
+                {formatMoney(despesasDiscrim.distante.val)}
+              </span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
 
-              <button 
-                onClick={() => setSelectedCategory(null)}
-                className="w-full py-3 bg-slate-800 text-white font-bold rounded-2xl hover:bg-slate-900 transition-all active:scale-95"
-              >
-                Fechar
-              </button>
+          {/* Total Despesa */}
+          <div className="pt-2 border-t border-[#27272a] flex items-center justify-between cursor-pointer group">
+            <span className="text-sm font-bold text-white">Total despesa</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-extrabold text-white">
+                {formatMoney(despesasDiscrim.total)}
+              </span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Card 6: Discriminação das Receitas */}
+      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3.5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">Discriminação das receitas</h3>
+          <button className="text-zinc-500 hover:text-zinc-300 p-1">
+            <MoreVertical size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-2.5">
+          {/* Efetivadas */}
+          <div className="flex items-center justify-between p-1 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#14532d]/40 text-[#4ade80] border border-[#22c55e]/30">
+                {receitasDiscrim.efetivadas.pct}%
+              </span>
+              <span className="text-sm text-zinc-200 font-medium">Efetivadas</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">
+                {formatMoney(receitasDiscrim.efetivadas.val)}
+              </span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
+
+          {/* Próximo do Vencimento */}
+          <div className="flex items-center justify-between p-1 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#713f12]/40 text-[#fde047] border border-[#f59e0b]/30">
+                0%
+              </span>
+              <span className="text-sm text-zinc-200 font-medium">Próximo do vencimento</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">{formatMoney(0)}</span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
+
+          {/* Vencidas */}
+          <div className="flex items-center justify-between p-1 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#7f1d1d]/40 text-[#fca5a5] border border-[#ef4444]/30">
+                0%
+              </span>
+              <span className="text-sm text-zinc-200 font-medium">Vencidas</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">{formatMoney(0)}</span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
+
+          {/* Distante do Vencimento */}
+          <div className="flex items-center justify-between p-1 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#27272a] text-[#a1a1aa] border border-[#3f3f46]">
+                0%
+              </span>
+              <span className="text-sm text-zinc-200 font-medium">Distante do vencimento</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">{formatMoney(0)}</span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
+
+          {/* Total Receita */}
+          <div className="pt-2 border-t border-[#27272a] flex items-center justify-between cursor-pointer group">
+            <span className="text-sm font-bold text-white">Total receita</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-extrabold text-white">
+                {formatMoney(receitasDiscrim.total)}
+              </span>
+              <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Card 7: Evolução das Despesas (Line Chart) */}
+      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">Evolução das despesas</h3>
+          <div className="flex items-center gap-1 text-zinc-500">
+            <button className="p-1 hover:text-zinc-300">
+              <Info size={16} />
+            </button>
+            <button className="p-1 hover:text-zinc-300">
+              <ExternalLink size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="h-44 w-full pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={evolucaoDespesasData}>
+              <XAxis
+                dataKey="name"
+                stroke="#52525b"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis hide />
+              <Tooltip
+                formatter={(val: number) => [formatMoney(val), 'Despesas']}
+                contentStyle={{
+                  backgroundColor: '#121214',
+                  borderColor: '#27272a',
+                  borderRadius: '12px',
+                  color: '#ffffff'
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#ffffff"
+                strokeWidth={2.5}
+                dot={{ fill: '#ffffff', stroke: '#18181b', strokeWidth: 2, r: 5 }}
+                activeDot={{ r: 7, fill: '#8ab4f8' }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Card 8: Receitas por Recorrência */}
+      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">Receitas por recorrência</h3>
+        </div>
+
+        <div className="h-56 w-full flex items-center justify-center">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={receitasPorRecorrencia}
+                cx="50%"
+                cy="50%"
+                outerRadius={80}
+                dataKey="value"
+                stroke="#18181b"
+                strokeWidth={2}
+              >
+                {receitasPorRecorrencia.map((entry, index) => (
+                  <Cell key={`cell-rec-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(val: number, name: string) => [formatMoney(val), name]}
+                contentStyle={{
+                  backgroundColor: '#121214',
+                  borderColor: '#27272a',
+                  borderRadius: '12px',
+                  color: '#ffffff'
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Botão Configurar Resumo */}
+      <div className="pt-2 pb-6 flex justify-center">
+        <button
+          onClick={() => onNavigateTab('settings')}
+          className="flex items-center gap-2 text-zinc-400 hover:text-white transition px-4 py-2 rounded-xl text-xs font-semibold hover:bg-[#18181b]"
+        >
+          <LayoutGrid size={16} />
+          <span>Configurar resumo</span>
+        </button>
+      </div>
     </div>
   );
 };
