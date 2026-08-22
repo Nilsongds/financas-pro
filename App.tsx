@@ -49,7 +49,22 @@ const App: React.FC = () => {
     loadList<string>(ACCOUNTS_KEY, ['Minha Conta Corrente', 'Minha Carteira'])
   );
 
-  // Modal states
+    useEffect(() => {
+    setCategories((previous) => {
+      if (previous.some((category) => category.name === 'Investimentos')) return previous;
+      return [...previous, {
+        id: 'investimentos',
+        name: 'Investimentos',
+        type: 'percentage',
+        percentage: 0,
+        fixedValue: 0,
+        description: '',
+        color: '#8b5cf6',
+      }];
+    });
+  }, []);
+
+// Modal states
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddType, setQuickAddType] = useState<'Receita' | 'Despesa' | 'Transferência' | 'Despesa cartão'>('Receita');
 
@@ -86,8 +101,47 @@ const App: React.FC = () => {
   }, [salary, accounts]);
 
   useEffect(() => {
+    localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+  }, [transactions]);
+
+  useEffect(() => {
+    const handleDebtPayment = (event: Event) => {
+      const detail = (event as CustomEvent<{ action: 'add' | 'remove'; id: string; value: number; description: string }>).detail;
+      if (!detail?.id) return;
+
+      setTransactions(current => {
+        if (detail.action === 'remove') {
+          return current.filter(transaction => transaction.id !== detail.id);
+        }
+        if (current.some(transaction => transaction.id === detail.id)) return current;
+
+        return [{
+          id: detail.id,
+          type: 'Saída',
+          value: detail.value,
+          date: new Date().toLocaleDateString('en-CA'),
+          category: 'Dívidas',
+          description: detail.description,
+          account: 'Minha Conta Corrente',
+          status: 'Efetivada',
+          createdAt: Date.now()
+        }, ...current];
+      });
+    };
+
+    window.addEventListener('fin-debt-payment', handleDebtPayment);
+    return () => window.removeEventListener('fin-debt-payment', handleDebtPayment);
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(DEBTS_KEY, JSON.stringify(debts));
   }, [debts]);
+
+  useEffect(() => {
+    const syncDebts = () => setDebts(loadList<Debt>(DEBTS_KEY, []));
+    window.addEventListener('fin-debts-changed', syncDebts);
+    return () => window.removeEventListener('fin-debts-changed', syncDebts);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
@@ -136,7 +190,72 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  const handleResetAll = () => {
+  const handleCloseMonth = () => {
+
+  const monthKey = currentDate.toLocaleDateString('en-CA').slice(0, 7);
+  const monthItems = transactions.filter((item) => item.date.startsWith(monthKey));
+  const receitas = monthItems.filter((item) => item.type === 'Entrada' || item.type === 'Rendimento').reduce((total, item) => total + (Number(item.value) || 0), 0);
+  const despesas = monthItems.filter((item) => item.type === 'Saída' || item.type === 'Despesa Cartão').reduce((total, item) => total + (Number(item.value) || 0), 0);
+  const record: HistoryRecord = {
+    id: `fechamento-${monthKey}`,
+    date: `${monthKey}-01`,
+    salary: receitas,
+            expenses: despesas,
+        balance: receitas - despesas,
+    allocations: categories.map((category) => ({
+      name: category.name,
+      value: category.type === 'percentage' ? (receitas * category.percentage) / 100 : category.fixedValue,
+      percentage: category.type === 'percentage' ? category.percentage : 0,
+    })),
+  };
+  setHistory((previous) => [record, ...previous.filter((item) => item.id !== record.id)]);
+  setActiveTab('history');
+};
+
+  useEffect(() => {
+    const closePreviousMonthAutomatically = () => {
+      const now = new Date();
+      const closingDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const monthKey = closingDate.toLocaleDateString('en-CA').slice(0, 7);
+      const recordId = `fechamento-${monthKey}`;
+
+      if (history.some((item) => item.id === recordId)) return;
+
+      const monthItems = transactions.filter((item) => item.date.startsWith(monthKey));
+      if (monthItems.length === 0) return;
+
+      const receitas = monthItems
+        .filter((item) => item.type === 'Entrada' || item.type === 'Rendimento')
+        .reduce((total, item) => total + (Number(item.value) || 0), 0);
+
+            const despesas = monthItems
+        .filter((item) => item.type === 'Saída' || item.type === 'Despesa Cartão')
+        .reduce((total, item) => total + (Number(item.value) || 0), 0);
+
+const record: HistoryRecord = {
+        id: recordId,
+        date: `${monthKey}-01`,
+        salary: receitas,
+              expenses: despesas,
+      balance: receitas - despesas,
+        allocations: categories.map((category) => ({
+          name: category.name,
+          value: category.type === 'percentage' ? (receitas * category.percentage) / 100 : category.fixedValue,
+          percentage: category.type === 'percentage' ? category.percentage : 0,
+        })),
+      };
+
+      setHistory((previous) =>
+        previous.some((item) => item.id === recordId) ? previous : [record, ...previous]
+      );
+    };
+
+    closePreviousMonthAutomatically();
+    const timer = window.setInterval(closePreviousMonthAutomatically, 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [transactions, categories, history]);
+
+const handleResetAll = () => {
     // Limpa todas as chaves de armazenamento local do app
     Object.keys(localStorage)
       .filter((key) => key.startsWith('fin_'))
@@ -224,6 +343,7 @@ const App: React.FC = () => {
           history={history}
           onClear={clearHistory}
           onDelete={deleteHistoryItem}
+          onCloseMonth={handleCloseMonth}
         />
       )}
 

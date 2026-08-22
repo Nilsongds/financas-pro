@@ -12,7 +12,9 @@ export interface HistoryRecord {
   id: string;
   date: string;
   salary: number;
-  allocations: {
+    expenses?: number;
+  balance?: number;
+allocations: {
     name: string;
     value: number;
     percentage: number;

@@ -52,19 +52,51 @@ export const Transactions: React.FC<TransactionsProps> = () => {
 
   useEffect(() => {
     localStorage.setItem(DEBTS_KEY, JSON.stringify(debts));
+    window.dispatchEvent(new Event('fin-debts-changed'));
   }, [debts]);
 
-  const activeDebts = debts.filter(debt => !debt.paid);
-  const paidDebts = debts.filter(debt => debt.paid);
-  const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.totalValue, 0);
+  const notifyDebtPayment = (debt: Debt, installment: number, action: 'add' | 'remove') => {
+    const month = new Date().toLocaleDateString('en-CA').slice(0, 7);
+    const id = debt.isRecurring
+      ? 'debt-payment-' + debt.id + '-' + month
+      : 'debt-payment-' + debt.id + '-' + installment;
+    const value = debt.isRecurring ? debt.totalValue : debt.totalValue / debt.installments;
+    const description = debt.isRecurring
+      ? 'Pagamento de conta: ' + debt.name
+      : 'Parcela ' + installment + '/' + debt.installments + ': ' + debt.name;
+
+    window.dispatchEvent(new CustomEvent('fin-debt-payment', {
+      detail: { action, id, value, description }
+    }));
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      debts.forEach(debt => {
+        const paidCount = debt.isRecurring ? (debt.paid ? 1 : 0) : (debt.paidInstallments || 0);
+        for (let installment = 1; installment <= paidCount; installment += 1) {
+          notifyDebtPayment(debt, installment, 'add');
+        }
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const activeDebts = debts.filter(debt => debt.isRecurring ? !debt.paid : (debt.paidInstallments || 0) < debt.installments);
+  const paidDebts = debts.filter(debt => debt.isRecurring ? debt.paid : (debt.paidInstallments || 0) >= debt.installments);
+  const totalDebt = activeDebts.reduce((sum, debt) => sum + (debt.isRecurring ? debt.totalValue : debt.totalValue * (1 - (debt.paidInstallments || 0) / debt.installments)), 0);
 
   const reminders = activeDebts
     .map(debt => {
+      const paidCount = debt.isRecurring ? 0 : (debt.paidInstallments || 0);
       const due = new Date(debt.dueDate + 'T12:00:00');
+      if (!debt.isRecurring) due.setMonth(due.getMonth() + paidCount);
       const now = new Date();
       now.setHours(12, 0, 0, 0);
       const days = Math.ceil((due.getTime() - now.getTime()) / 86400000);
-      return { debt, days };
+      const value = debt.isRecurring ? debt.totalValue : debt.totalValue / debt.installments;
+      const installmentLabel = debt.isRecurring ? 'Mensal' : 'Parcela ' + (paidCount + 1) + '/' + debt.installments;
+      return { debt, days, value, installmentLabel };
     })
     .filter(item => item.days <= item.debt.reminderDays)
     .sort((a, b) => a.days - b.days);
@@ -105,19 +137,34 @@ export const Transactions: React.FC<TransactionsProps> = () => {
   const toggleDebtPaid = (id: string) => {
     setDebts(current => current.map(item => {
       if (item.id !== id) return item;
+      const currentPaid = item.isRecurring ? (item.paid ? 1 : 0) : (item.paidInstallments || 0);
       const nextPaid = !item.paid;
-      return {
-        ...item,
-        paid: nextPaid,
-        paidInstallments: nextPaid ? item.installments : 0
-      };
+      const nextCount = nextPaid ? item.installments : 0;
+
+      if (nextCount > currentPaid) {
+        for (let installment = currentPaid + 1; installment <= nextCount; installment += 1) {
+          notifyDebtPayment(item, installment, 'add');
+        }
+      }
+      if (nextCount < currentPaid) {
+        for (let installment = currentPaid; installment > nextCount; installment -= 1) {
+          notifyDebtPayment(item, installment, 'remove');
+        }
+      }
+
+      return { ...item, paid: nextPaid, paidInstallments: nextCount };
     }));
   };
 
   const changePaidInstallments = (id: string, delta: number) => {
     setDebts(current => current.map(item => {
       if (item.id !== id) return item;
-      const next = Math.max(0, Math.min(item.installments, (item.paidInstallments || 0) + delta));
+      const currentPaid = item.paidInstallments || 0;
+      const next = Math.max(0, Math.min(item.installments, currentPaid + delta));
+
+      if (next > currentPaid) notifyDebtPayment(item, next, 'add');
+      if (next < currentPaid) notifyDebtPayment(item, currentPaid, 'remove');
+
       return {
         ...item,
         paidInstallments: next,
@@ -156,10 +203,10 @@ export const Transactions: React.FC<TransactionsProps> = () => {
             Lembretes de vencimento próximo
           </div>
           <div className="space-y-1 text-xs text-amber-200">
-            {reminders.map(({ debt, days }) => (
+            {reminders.map(({ debt, days, value, installmentLabel }) => (
               <p key={debt.id} className="flex items-center justify-between">
-                <span><strong>{debt.name}</strong> ({formatMoney(debt.totalValue)})</span>
-                <span className="font-bold underline">{days <= 0 ? 'Vence HOJE!' : `Vence em ${days} dia(s)`}</span>
+                <span><strong>{debt.name}</strong> ({formatMoney(value)}) · {installmentLabel}</span>
+                <span className="font-bold underline">{days < 0 ? `Vencida há ${Math.abs(days)} dia(s)` : days === 0 ? 'Vence HOJE!' : `Vence em ${days} dia(s)`}</span>
               </p>
             ))}
           </div>

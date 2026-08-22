@@ -30,6 +30,21 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   const [budgetCategory, setBudgetCategory] = useState('');
   const [description, setDescription] = useState('');
 
+  const incomeCategories = ['Salário', 'Dividendos', 'Juros e rendimentos', 'Renda extra', 'Freelance', 'Aluguel recebido', 'Reembolso', 'Venda', 'Prêmios', 'Outros'];
+  const expenseCategories = ['Moradia', 'Contas e serviços', 'Mercado', 'Transporte', 'Saúde', 'Educação', 'Lazer', 'Assinaturas', 'Impostos', 'Dívidas', 'Investimentos', 'Outros'];
+  const categoryOptions = selectedType === 'Receita' ? incomeCategories : expenseCategories;
+  const categoryLabel = selectedType === 'Receita' ? 'Origem da receita' : 'Categoria da despesa';
+  const detailLabel = selectedType === 'Receita' && category === 'Dividendos'
+    ? 'Ativo pagador (opcional)'
+    : selectedType === 'Receita' && category === 'Juros e rendimentos'
+      ? 'Instituição ou ativo (opcional)'
+      : '{detailLabel}';
+  const detailPlaceholder = selectedType === 'Receita' && category === 'Dividendos'
+    ? 'Ex.: ITUB4, HGLG11 ou ETF'
+    : selectedType === 'Receita' && category === 'Juros e rendimentos'
+      ? 'Ex.: 99Pay, CDB Banco X ou Tesouro Direto'
+      : 'Ex.: Compras da semana no mercado';
+
   useEffect(() => {
     if (isOpen) {
       setSelectedType(initialType);
@@ -246,7 +261,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
               {/* Category */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <Tag size={14} className="text-zinc-400" /> Categoria
+                  <Tag size={14} className="text-zinc-400" /> {categoryLabel}
                 </label>
                 <input
                   list="category-suggestions"
@@ -256,19 +271,30 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   className="w-full bg-[#121214] border border-[#27272a] text-white rounded-xl p-3 text-sm focus:outline-none focus:border-zinc-500"
                 />
                 <datalist id="category-suggestions">
-                  {categories.map((c) => (
+                  {categoryOptions.map((c) => (
                     <option key={c} value={c} />
                   ))}
                 </datalist>
+                  <select
+                    value=""
+                    onChange={(e) => { if (e.target.value) setCategory(e.target.value); }}
+                    className="w-full bg-[#18181b] border border-[#27272a] text-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-zinc-500"
+                  >
+                    <option value="">Escolha uma sugestão</option>
+                    {categoryOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
               </div>
 
               {/* Budget Category for Salário Planning */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <Layers size={14} className="text-zinc-400" /> Categoria do Planejamento
+                  <Layers size={14} className="text-zinc-400" /> Destino no planejamento (opcional)
                 </label>
                 <select
                   value={budgetCategory}
+                    disabled={selectedType === 'Receita'}
                   onChange={(e) => setBudgetCategory(e.target.value)}
                   className="w-full bg-[#121214] border border-[#27272a] text-white rounded-xl p-3 text-sm focus:outline-none focus:border-zinc-500"
                 >
@@ -286,13 +312,13 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
           {/* Description */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-zinc-300">
-              Descrição / Observação (Opcional)
+              {detailLabel}
             </label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ex: Compras da semana no mercado"
+              placeholder={detailPlaceholder}
               className="w-full bg-[#121214] border border-[#27272a] text-white rounded-xl p-3 text-sm focus:outline-none focus:border-zinc-500"
             />
           </div>

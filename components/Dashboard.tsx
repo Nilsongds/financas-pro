@@ -86,7 +86,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       balances[acc] = 0;
     });
 
-    transactions.forEach(t => {
+    transactions.filter(t => t.date <= new Date().toLocaleDateString('en-CA')).forEach(t => {
       const val = Number(t.value) || 0;
       if (t.type === 'Entrada' || t.type === 'Rendimento') {
         balances[t.account] = (balances[t.account] || 0) + val;
@@ -124,7 +124,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return hasSalaryTx ? txRevenues : txRevenues + (salary || 0);
   }, [monthTransactions, salary]);
 
-  const despesasMes = useMemo(() => {
+      const receitaSalarioMes = useMemo(() => {
+    const salarioRegistrado = monthTransactions
+      .filter((item) =>
+        item.type === 'Entrada' &&
+        (item.category || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === 'salario'
+      )
+      .reduce((total, item) => total + (Number(item.value) || 0), 0);
+
+    return salarioRegistrado > 0 ? salarioRegistrado : (salary || 0);
+  }, [monthTransactions, salary]);
+
+const planejamentoPorCategoria = useMemo(() => {
+    return categories.map((category) => {
+      const value = category.type === 'percentage'
+                ? (receitaSalarioMes * category.percentage) / 100
+        : category.fixedValue;
+      const percentage = category.type === 'percentage'
+        ? category.percentage
+                : receitaSalarioMes > 0 ? (category.fixedValue / receitaSalarioMes) * 100 : 0;
+
+      return { ...category, value, percentage };
+    });
+    }, [categories, receitaSalarioMes]);
+
+const despesasMes = useMemo(() => {
     return monthTransactions
       .filter(t => t.type === 'Saída' || t.type === 'Despesa Cartão')
       .reduce((sum, t) => sum + t.value, 0);
@@ -139,7 +163,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Saldo real e previsto
   const saldoAtual = totalContas;
   const saldoInicialMes = Math.max(0, totalContas - (receitasMes - despesasMes));
-  const saldoPrevisto = saldoAtual + (receitasMes - despesasMes);
+  const despesasPrevistasMes = useMemo(() => {
+    return debts.reduce((sum, debt) => {
+      const firstDue = new Date(debt.dueDate + 'T12:00:00');
+      const monthDistance = (currentDate.getFullYear() - firstDue.getFullYear()) * 12 + currentDate.getMonth() - firstDue.getMonth();
+      if (monthDistance < 0) return sum;
+
+      if (debt.isRecurring) {
+        const isCurrentMonth = monthDistance === 0;
+        return (!isCurrentMonth || !debt.paid) ? sum + debt.totalValue : sum;
+      }
+
+      const paidInstallments = debt.paidInstallments || 0;
+      if (monthDistance >= paidInstallments && monthDistance < debt.installments) {
+        return sum + debt.totalValue / debt.installments;
+      }
+      return sum;
+    }, 0);
+  }, [debts, currentDate]);
+
+  const saldoPrevisto = transactions.reduce((saldo, t) => {
+    const valor = Number(t.value) || 0;
+    if (t.type === 'Entrada' || t.type === 'Rendimento' || t.type === 'Resgate') return saldo + valor;
+    if (t.type === 'Saída' || t.type === 'Despesa Cartão' || t.type === 'Aplicação') return saldo - valor;
+    return saldo;
+  }, 0) - despesasPrevistasMes;
 
   // Economia mensal
   const valorEconomizado = Math.max(0, receitasMes - despesasMes);
@@ -232,29 +280,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     return [
       { name: 'Sem 1', value: daysMap[1] || 0 },
-      { name: 'Sem 2', value: (daysMap[7] || 0) + (daysMap[1] ? 150 : 0) },
+      { name: 'Sem 2', value: daysMap[7] || 0 },
       { name: 'Sem 3', value: daysMap[14] || 0 },
       { name: 'Sem 4', value: (daysMap[21] || 0) + (daysMap[28] || 0) },
     ];
   }, [monthTransactions]);
-
-  // Receitas por recorrência
-  const receitasPorRecorrencia = useMemo(() => {
-    const fixas = salary;
-    const variaveis = monthTransactions
-      .filter(t => t.type === 'Entrada' && !t.category.toLowerCase().includes('salário'))
-      .reduce((acc, t) => acc + t.value, 0);
-
-    const total = fixas + variaveis;
-    if (total === 0) {
-      return [{ name: 'Sem receitas', value: 1, color: '#27272a' }];
-    }
-
-    return [
-      { name: 'Salário / Fixa', value: fixas || 1, color: '#e4e4e7' },
-      { name: 'Renda Extra / Variável', value: variaveis || 0.1, color: '#71717a' },
-    ];
-  }, [salary, monthTransactions]);
 
   // Timeline de 7 dias centralizada
   const timelineDays = useMemo(() => {
@@ -293,8 +323,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <ChevronRight className="rotate-180" size={20} />
           </button>
           
-          <h2 className="text-lg font-bold text-white tracking-wide capitalize">
+          <h2 className="absolute left-1/2 -translate-x-1/2 text-center text-lg font-bold text-white tracking-wide capitalize">
             {monthCapitalized}
+                          <span className="mt-0.5 block text-[10px] font-medium normal-case tracking-normal text-zinc-400">
+                {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+              </span>
           </h2>
 
           <button
@@ -387,43 +420,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Card 1: Visão Geral */}
       <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="relative flex items-center justify-between">
           <h3 className="text-base font-bold text-white">Visão geral do mês</h3>
         </div>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
           {/* Receitas */}
-          <div
-            onClick={() => onOpenQuickAdd('Receita')}
-            className="flex items-center justify-between p-2 rounded-2xl bg-[#121214] border border-[#27272a] cursor-pointer hover:border-[#22c55e]/50 transition"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#22c55e] text-black flex items-center justify-center shadow-md font-bold">
-                <Plus size={20} />
-              </div>
-              <div>
-                <span className="text-sm font-bold text-white block">Receitas</span>
-                <span className="text-[11px] text-zinc-400">Total recebido no mês</span>
-              </div>
+          <div className="p-4 rounded-2xl bg-[#121214] border border-[#27272a] space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#4ade80]">
+              <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
+              <span>Receitas</span>
             </div>
-            <span className="text-base font-extrabold text-[#4ade80]">{formatMoney(receitasMes)}</span>
+            <p className="text-lg sm:text-xl font-extrabold text-white">
+              {formatMoney(receitasMes)}
+            </p>
+            <p className="text-[10px] text-zinc-400">Total recebido no mês</p>
           </div>
 
           {/* Despesas */}
-          <div
-            onClick={() => onOpenQuickAdd('Despesa')}
-            className="flex items-center justify-between p-2 rounded-2xl bg-[#121214] border border-[#27272a] cursor-pointer hover:border-[#ef4444]/50 transition"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#ef4444] text-white flex items-center justify-center shadow-md font-bold">
-                <Minus size={20} />
-              </div>
-              <div>
-                <span className="text-sm font-bold text-white block">Despesas</span>
-                <span className="text-[11px] text-zinc-400">Total gasto no mês</span>
-              </div>
+          <div className="p-4 rounded-2xl bg-[#121214] border border-[#27272a] space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#f87171]">
+              <span className="w-2 h-2 rounded-full bg-[#f87171]" />
+              <span>Despesas</span>
             </div>
-            <span className="text-base font-extrabold text-[#f87171]">{formatMoney(despesasMes)}</span>
+            <p className="text-lg sm:text-xl font-extrabold text-white">
+              {formatMoney(despesasMes)}
+            </p>
+            <p className="text-[10px] text-zinc-400">Total gasto no mês</p>
+                  {despesasPrevistasMes > 0 && (
+                    <p className="text-[10px] text-amber-400 font-semibold">Parcelas previstas: {formatMoney(despesasPrevistasMes)}</p>
+                  )}
           </div>
         </div>
       </div>
@@ -490,8 +516,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Card 4: Despesas por Categoria */}
-      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3">
+                          {/* Card 4: Despesas por Categoria */}
+      <div className="hidden bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-white">Despesas por categoria</h3>
           <div className="flex items-center gap-1 text-zinc-500">
@@ -535,7 +561,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Card 5: Discriminação das Despesas */}
-      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3.5">
+      <div className="hidden bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3.5">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-white">Discriminação das despesas</h3>
           <button className="text-zinc-500 hover:text-zinc-300 p-1">
@@ -564,13 +590,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-center justify-between p-1 cursor-pointer group">
             <div className="flex items-center gap-2.5">
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#713f12]/40 text-[#fde047] border border-[#f59e0b]/30">
-                {despesasDiscrim.proximo.pct}%
+                {despesasPrevistasMes > 0 ? 100 : 0}%
               </span>
-              <span className="text-sm text-zinc-200 font-medium">Próximo do vencimento</span>
+              <span className="text-sm text-zinc-200 font-medium">{despesasPrevistasMes > 0 ? 'Parcelas previstas' : 'Sem parcelas previstas'}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-semibold text-white">
-                {formatMoney(despesasDiscrim.proximo.val)}
+                {formatMoney(despesasPrevistasMes)}
               </span>
               <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
             </div>
@@ -613,7 +639,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="text-sm font-bold text-white">Total despesa</span>
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-extrabold text-white">
-                {formatMoney(despesasDiscrim.total)}
+                {formatMoney(despesasMes + despesasPrevistasMes)}
               </span>
               <ChevronRight size={14} className="text-zinc-500 group-hover:text-white" />
             </div>
@@ -622,7 +648,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Card 6: Discriminação das Receitas */}
-      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3.5">
+      <div className="hidden bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3.5">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-white">Discriminação das receitas</h3>
           <button className="text-zinc-500 hover:text-zinc-300 p-1">
@@ -702,7 +728,65 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Card 7: Evolução das Despesas (Line Chart) */}
+                                        {/* Orçamento mensal por categoria */}
+      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-white">Orçamento por categoria</h3>
+                        <p className="mt-1 text-xs text-zinc-400">Divisão do salário recebido no mês</p>
+          </div>
+                    <span className="text-xs font-semibold text-[#8ab4f8]">{formatMoney(receitaSalarioMes)}</span>
+        </div>
+
+                {receitaSalarioMes > 0 ? (
+          <>
+            <div className="h-48 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={planejamentoPorCategoria}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={72}
+                    paddingAngle={3}
+                    dataKey="value"
+                    stroke="#18181b"
+                    strokeWidth={2}
+                  >
+                    {planejamentoPorCategoria.map((item) => (
+                      <Cell key={item.id} fill={item.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(val: number, name: string) => [formatMoney(val), name]}
+                    contentStyle={{ backgroundColor: '#121214', borderColor: '#27272a', borderRadius: '12px', color: '#ffffff' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {planejamentoPorCategoria.map((item) => (
+                <div key={item.id} className="rounded-xl bg-[#121214] p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                    <p className="truncate text-xs font-semibold text-zinc-200">{item.name}</p>
+                  </div>
+                  <p className="mt-1 text-sm font-bold text-white">{item.percentage.toFixed(0)}%</p>
+                  <p className="text-xs text-zinc-400">{formatMoney(item.value)} disponível</p>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-[#3f3f46] bg-[#121214] p-5 text-center text-xs text-zinc-400">
+            Registre uma receita para visualizar o orçamento deste mês.
+          </div>
+        )}
+      </div>
+
+{/* Card 7: Evolução das Despesas (Line Chart) */}
       <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-white">Evolução das despesas</h3>
@@ -748,43 +832,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </ResponsiveContainer>
         </div>
       </div>
-
-      {/* Card 8: Receitas por Recorrência */}
-      <div className="bg-[#18181b] rounded-3xl p-5 border border-[#27272a] shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-white">Receitas por recorrência</h3>
-        </div>
-
-        <div className="h-56 w-full flex items-center justify-center">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={receitasPorRecorrencia}
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                dataKey="value"
-                stroke="#18181b"
-                strokeWidth={2}
-              >
-                {receitasPorRecorrencia.map((entry, index) => (
-                  <Cell key={`cell-rec-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(val: number, name: string) => [formatMoney(val), name]}
-                contentStyle={{
-                  backgroundColor: '#121214',
-                  borderColor: '#27272a',
-                  borderRadius: '12px',
-                  color: '#ffffff'
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
       {/* Botão Configurar Resumo */}
       <div className="pt-2 pb-6 flex justify-center">
         <button
